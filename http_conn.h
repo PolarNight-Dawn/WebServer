@@ -17,6 +17,8 @@
 #include <cstdio>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <sys/uio.h>
+#include <cstdarg>
 
 class http_conn {
 public:
@@ -94,7 +96,22 @@ public:
 
     char *get_line() { return m_read_buf + m_start_line; }
 
+    /* 一组由 process_write() 调用来回复 HTTP 响应的函数 */
     void unmap();
+
+    bool add_response(const char* format, ...);
+
+    bool add_header(int content_len);
+
+    bool add_content(const char* content);
+
+    bool add_status_line(int status, const char* title);
+
+    bool add_content_length(int content_len);
+
+    bool add_linger();
+
+    bool add_blank_line();
 
 public:
     /* 设置所有 socket 上的事件注册到一个 epoll 内核事件表 */
@@ -111,6 +128,10 @@ private:
     char m_read_buf[READ_BUFFER_SIZE];
     /* 已经读入的数据的最后一个字节的下一位 */
     int m_read_idx;
+    /* 写缓冲区 */
+    char m_write_buf[WRITE_BUFFER_SIZE];
+    /* 写缓冲区中待发送的字节数 */
+    int m_write_idx;
     /* 当前正在解析的字符在读写缓冲区中的位置 */
     int m_check_idx;
     /* 当前正在解析的行的在读缓冲区中的位置 */
@@ -138,6 +159,10 @@ private:
     struct stat m_file_stat;
     /* 目标文件被映射到内存的首地址*/
     char *m_file_address;
+
+    /* 通过内存块分散写 */
+    struct iovec m_iv[2];
+    int m_iv_count;
 
 };
 

@@ -6,6 +6,16 @@
 
 #include "http_conn.h"
 
+const char *ok_200_title = "OK";
+const char *error_400_title = "Bad Request";
+const char *error_400_form = "Your request has bad syntax or is inherently impossible to satisfy.\n";
+const char *error_403_title = "Forbidden";
+const char *error_403_form = "You do not have permission to get file from this server.\n";
+const char *error_404_title = "Not Found";
+const char *error_404_form = "The requested file was not found on this server.\n";
+const char *error_500_title = "Internal Error";
+const char *error_500_form = "There was an unusual problem serving the requested file.\n";
+
 static const char *doc_root = "/home/polarnight/Code/CLionProject/WebServer/resources";
 
 /* 设置非阻塞 */
@@ -95,7 +105,10 @@ void http_conn::init() {
     m_read_idx = 0;
     m_real_file = nullptr;
     m_file_address = nullptr;
+    m_write_idx = 0;
     memset(m_read_buf, '\0', READ_BUFFER_SIZE);
+    memset(m_write_buf, '\0', WRITE_BUFFER_SIZE);
+    memset(m_real_file, '\0', FILENAME_LEN);
 }
 
 /* 读取客户数据 */
@@ -178,7 +191,7 @@ http_conn::HTTP_CODE http_conn::parse_request_line(char *text) {
     m_url += strspn(m_url, " \t");
     m_version = strpbrk(m_url, " \t");
     if (!m_version) {
-        return  BAD_REQUEST;
+        return BAD_REQUEST;
     }
     *m_version++ = '\0';
     m_version += strspn(m_version, " \t");
@@ -226,10 +239,10 @@ http_conn::HTTP_CODE http_conn::parse_headers(char *text) {
 
 http_conn::HTTP_CODE http_conn::parse_content(char *text) {
     if (m_read_idx >= (m_content_length + m_check_idx)) {
-        text[m_content_length]  = '\0';
+        text[m_content_length] = '\0';
         return GET_REQUEST;
     }
-    return  NO_REQUEST;
+    return NO_REQUEST;
 }
 
 http_conn::HTTP_CODE http_conn::do_request() {
@@ -285,5 +298,140 @@ http_conn::LINE_STATUS http_conn::parse_line() {
 
 /* 写入客户数据 */
 bool http_conn::write() {
+    int temp = 0;
+    int byte_to_send = m_write_idx;
+    int byte_have_snd = 0;
+    if (byte_to_send == 0) {
+        modfd(m_epollfd, m_sockfd, EPOLLIN);
+        init();
+        return true;
+    }
+    while (true) {
+        temp = writev(m_sockfd, m_iv, m_iv_count);
+        if (temp <= -1) {
+            if (errno == EAGAIN) {
+                modfd(m_epollfd, m_sockfd, EPOLLOUT);
+                return true;
+            }
+            unmap();
+            return false;
+        }
 
+        byte_to_send -= temp;
+        byte_have_snd += temp;
+        if (byte_to_send <= byte_have_snd) {
+            unmap();
+            if (m_linger) {
+                init();
+                modfd(m_epollfd, m_sockfd, EPOLLIN);
+            } else {
+                modfd(m_epollfd, m_sockfd, EPOLLIN);
+                return false;
+            }
+        }
+
+    }
+}
+
+bool http_conn::add_response(const char *format, ...) {
+    if (m_write_idx >= WRITE_BUFFER_SIZE) {
+        return false;
+    }
+
+    va_list arg_list;
+    va_start(arg_list, format);
+    int len = vsnprintf(m_write_buf + m_write_idx, WRITE_BUFFER_SIZE - 1 - m_write_idx, format, arg_list);
+    if (len >= (WRITE_BUFFER_SIZE - 1 - m_write_idx)) {
+        return false;
+    }
+    m_write_idx += len;
+    va_end(arg_list);
+    return true;
+}
+
+bool http_conn::add_header(int content_len) {
+    add_content_length(content_len);
+    add_linger();
+    add_blank_line();
+    return true;
+}
+
+bool http_conn::add_content(const char *content) {
+    return add_response("%s", content);
+}
+
+bool http_conn::add_status_line(int status, const char *title) {
+    return add_response("%s %d %s\r\n", "HTTP/1.1", status, title);
+}
+
+bool http_conn::add_content_length(int content_len) {
+    return add_response("Content-Length: %d\r\n", content_len)
+}
+
+bool http_conn::add_linger() {
+    return add_response("Connection: %s\r\n", m_linger ? "keep-alive" : "close");
+}
+
+bool http_conn::add_blank_line() {
+    return add_response("%s", "\r\n");
+}
+
+bool http_conn::process_write(HTTP_CODE ret) {
+    switch (ret) {
+        case INTERNAL_ERROR: {
+            add_status_line(500, error_500_title);
+            add_header(strlen(error_500_form));
+            if (!add_content(error_500_form)) {
+                return false;
+            }
+            break;
+        }
+        case BAD_REQUEST: {
+            add_status_line(400, error_400_title);
+            add_header(strlen(error_400_form));
+            if (!add_content(error_400_form)) {
+                return false;
+            }
+            break;
+        }
+        case NO_RESOURCE: {
+            add_status_line(404, error_404_title);
+            add_header(strlen(error_404_form));
+            if (!add_content(error_404_form)) {
+                return false;
+            }
+            break;
+        }
+        case FORBIDDEN_RESOURCE: {
+            add_status_line(403, error_403_title);
+            add_header(strlen(error_403_form));
+            if (!add_content(error_403_form)) {
+                return false;
+            }
+            break;
+        }
+        case FILE_REQUEST: {
+            add_status_line(200, ok_200_title);
+            if (m_file_stat.st_size != 0) {
+                add_header(m_file_stat.st_size);
+                m_iv[0].iov_base = m_write_buf;
+                m_iv[0].iov_len = m_write_idx;
+                m_iv[1].iov_base = m_file_address;
+                m_iv[1].iov_len = m_file_stat.st_size;
+            } else {
+                const char *ok_string = "<html><body></body></html>";
+                add_header(strlen(ok_string));
+                if (!add_content(ok_string)) {
+                    return false;
+                }
+            }
+        }
+        default: {
+            return false;
+        }
+    }
+
+    m_iv[0].iov_base = m_write_buf;
+    m_iv[0].iov_len = m_write_idx;
+    return true;
 }

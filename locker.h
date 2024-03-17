@@ -41,22 +41,22 @@ private:
 };
 
 /* 封装互斥量的类 */
-class mutex {
+class locker {
 public:
     /* 创建并初始化互斥量 */
-    mutex() {
+    locker() {
         if (pthread_mutex_init(&m_mutex, nullptr) != 0) {
             throw std::exception();
         }
     }
 
     /* 销毁互斥量 */
-    ~mutex() {
+    ~locker() {
         pthread_mutex_destroy(&m_mutex);
     }
 
     /* 获取互斥量 */
-    bool locke() {
+    bool lock() {
         return pthread_mutex_lock(&m_mutex) == 0;
     }
 

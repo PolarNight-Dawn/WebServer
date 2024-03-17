@@ -24,13 +24,13 @@
 #define MAX_EVENT_NUMBER 10000
 
 /* 注册事件到 epoll 指定的内核事件表 */
-extern int addfd(int epollfd, int fd, bool one_shot);
+extern void addfd(int epollfd, int fd, bool one_shot);
 
 /* 注销 epoll 内核事件表上的事件 */
-extern int removefd(int epollfd, int fd);
+extern void removefd(int epollfd, int fd);
 
 /* 修改 epoll 内核事件表上的事件 */
-extern int movfd(int epollfd, int fd);
+extern void modfd(int epollfd, int fd, int ev);
 
 void addsig(int sig, void(*sig_handler)(int), bool restart = true) {
     struct sigaction sa;

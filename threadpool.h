@@ -96,7 +96,7 @@ bool threadpool<T>::append(T *reuqest) {
 
 /* 子线程运行的工作函数，不断从请求列表中取出任务并执行 */
 template<typename T>
-static void *threadpool<T>::worker(void *arg) {
+void *threadpool<T>::worker(void *arg) {
     /* 静态成员函数 worker 没法调用类的非静态成员函数 */
     threadpool *pool = (threadpool *) arg;
     pool->run();

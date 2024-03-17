@@ -20,6 +20,8 @@
 #include <sys/uio.h>
 #include <cstdarg>
 
+#include "locker.h"
+
 class http_conn {
 public:
     /* 文件路径的最大长度 */
@@ -42,7 +44,7 @@ public:
         GET_REQUEST,
         BAD_REQUEST,
         NO_RESOURCE,
-        FORBIDDEN_RESOURCE,
+        FORBIDDEN_REQUEST,
         FILE_REQUEST,
         INTERNAL_ERROR,
         CLOSED_CONNECTION
@@ -62,7 +64,7 @@ public:
     void process();
 
     /* 初始化客户连接 */
-    void init(int sockfd, struct sockaddr_in address);
+    void init(int sockfd, const sockaddr_in &address);
 
     /* 关闭客户连接 */
     void close_conn(bool real_close = true);
@@ -81,7 +83,7 @@ public:
     HTTP_CODE process_read();
 
     /* 填充 HTTP 应答 */
-    bool process_write(HTTP_CODE);
+    bool process_write(HTTP_CODE ret);
 
     /* 一组由 process_read() 调用来解析 HTTP 请求的函数 */
     HTTP_CODE parse_request_line(char *text);
@@ -99,13 +101,13 @@ public:
     /* 一组由 process_write() 调用来回复 HTTP 响应的函数 */
     void unmap();
 
-    bool add_response(const char* format, ...);
+    bool add_response(const char *format, ...);
 
     bool add_header(int content_len);
 
-    bool add_content(const char* content);
+    bool add_content(const char *content);
 
-    bool add_status_line(int status, const char* title);
+    bool add_status_line(int status, const char *title);
 
     bool add_content_length(int content_len);
 
@@ -154,7 +156,7 @@ private:
     bool m_linger;
 
     /* 客户请求的目标文件的文件路径 */
-    char *m_real_file;
+    char m_real_file[FILENAME_LEN];
     /* 目标文件的状态 */
     struct stat m_file_stat;
     /* 目标文件被映射到内存的首地址*/

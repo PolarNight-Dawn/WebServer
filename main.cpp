@@ -19,6 +19,7 @@
 #include "locker.h"
 #include "threadpool.h"
 #include "http_conn.h"
+#include "lst_timer.h"
 
 #define MAX_FD 65536
 #define MAX_EVENT_NUMBER 10000
@@ -74,7 +75,6 @@ int main(int argc, char *argv[]) {
     /* 预先为每一个客户连接分配一个 http_conn 对象*/
     http_conn *users = new http_conn[MAX_FD];
     assert(users);
-    int user_count = 0;
 
     /* 创建 socket */
     int listenfd = socket(PF_INET, SOCK_STREAM, 0);
@@ -93,18 +93,41 @@ int main(int argc, char *argv[]) {
     address.sin_port = htons(port);
 
     ret = bind(listenfd, (struct sockaddr *) &address, sizeof(address));
-    assert(ret >= 0);
+    assert(ret != 0);
 
     /* 监听 */
     ret = listen(listenfd, 5);
-    assert(ret >= 0);
+    assert(ret != -1);
 
     /* 创建 epoll 实例 */
     epoll_event events[MAX_EVENT_NUMBER];
     int epollfd = epoll_create(5);
-    assert(epollfd >= 0);
+    assert(epollfd != -1);
     addfd(epollfd, listenfd, false);
     http_conn::m_epollfd = epollfd;
+
+    /* 创建管道套接字 */
+    ret = socketpair(PF_UNIX, SOCK_STREAM, 0, pipefd);
+    assert(ret != -1);
+
+    /* 写端设置非阻塞 */
+    setnonblocking(pipefd[1]);
+
+    /* 设置管道读端为 ET 非阻塞 */
+    addfd(epollfd, pipefd[0], false);
+
+    /* 传递给主循环的信号 */
+    addsig(SIGALRM, sig_handler, false);
+    addsig(SIGTERM, sig_handler, false);
+
+    /* 循环条件 */
+    bool stop_server = false;
+
+    /* 超时标志 */
+    bool timeout = false;
+
+    /* 每隔TIMESLOT 时间触发SIGALRM信号 */
+    alarm(TIMESLOT);
 
     while (true) {
         /* 就绪事件的数量 */
@@ -121,6 +144,7 @@ int main(int argc, char *argv[]) {
                 struct sockaddr_in client_address;
                 socklen_t client_addrlength = sizeof(client_address);
 
+#ifdef LT
                 int connfd = accept(listenfd, (struct sockaddr*) &client_address, &client_addrlength);
                 if (connfd < 0) {
                     printf("errno is： %d\n", errno);
@@ -132,10 +156,28 @@ int main(int argc, char *argv[]) {
                 }
                 /* 初始化客户连接 */
                 users[connfd].init(connfd, client_address);
+#endif
+
+#ifdef ET
+                while (true) {
+                    int connfd = accept(listenfd, (struct sockaddr *) &client_address, &client_addrlength);
+                    if (connfd < 0) {
+                        printf("errno is： %d\n", errno);
+                        break;
+                    }
+                    if (http_conn::m_user_count >= MAX_FD) {
+                        show_errno(connfd, "Internal server busy");
+                        break;
+                    }
+                    /* 初始化客户连接 */
+                    users[connfd].init(connfd, client_address);
+                }
+                continue;
+#endif
             } else if (events[i].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) {
                 /* 发生异常，直接关闭客户连接 */
                 users[sockfd].close_conn();
-            } else if (events[i].events & EPOLLIN) {
+            } else if ((sockfd == pipefd[0]) && (events[i].events & EPOLLIN)) {
                 /* 根据读的结果，决定是将任务添加到线程池，还是关闭连接 */
                 if (users[sockfd].read()) {
                     pool->append(users + sockfd);

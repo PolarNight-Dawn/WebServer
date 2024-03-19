@@ -23,6 +23,7 @@ public:
     /* 往请求队列中添加任务 */
     bool append(T *reuqest);
 
+private:
     /* 工作线程运行的函数，不断从请求列表中取出任务并执行 */
     static void *worker(void *arg);
 
@@ -50,15 +51,13 @@ template<typename T>
 threadpool<T>::threadpool(int thread_number, int max_request) : m_thread_number(thread_number),
                                                                 m_max_request(max_request), m_threads(nullptr),
                                                                 m_stop(false) {
-    if (thread_number <= 0 || max_request <= 0) {
+    if (thread_number <= 0 || max_request <= 0)
         throw std::exception();
-    }
 
     /* 初始化线程池数组 */
     m_threads = new pthread_t[m_thread_number];
-    if (!m_threads) {
+    if (!m_threads)
         throw std::exception();
-    }
 
     /* 创建子线程，并设置为脱离线程 */
     for (int i = 0; i < thread_number; i++) {
@@ -67,6 +66,7 @@ threadpool<T>::threadpool(int thread_number, int max_request) : m_thread_number(
             delete[] m_threads;
             throw std::exception();
         }
+
         if (pthread_detach(m_threads[i]) != 0) {
             delete[] m_threads;
             throw std::exception();
@@ -84,7 +84,7 @@ threadpool<T>::~threadpool() {
 template<typename T>
 bool threadpool<T>::append(T *reuqest) {
     m_queuelocker.lock();
-    if (m_workqueue.size() >= m_max_request) {
+    if (m_workqueue.size() > m_max_request) {
         m_queuelocker.unlock();
         return false;
     }
@@ -96,7 +96,7 @@ bool threadpool<T>::append(T *reuqest) {
 
 /* 子线程运行的工作函数，不断从请求列表中取出任务并执行 */
 template<typename T>
-    void *threadpool<T>::worker(void *arg) {
+void *threadpool<T>::worker(void *arg) {
     /* 静态成员函数 worker 没法调用类的非静态成员函数 */
     threadpool *pool = (threadpool *) arg;
     pool->run();
@@ -115,9 +115,9 @@ void threadpool<T>::run() {
         T *request = m_workqueue.front();
         m_workqueue.pop_front();
         m_queuelocker.unlock();
-        if (!request) {
+        if (!request)
             continue;
-        }
+
         request->process();
     }
 }

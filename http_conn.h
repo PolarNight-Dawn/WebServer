@@ -86,6 +86,10 @@ public:
     bool process_write(HTTP_CODE ret);
 
     /* 一组由 process_read() 调用来解析 HTTP 请求的函数 */
+    LINE_STATUS parse_line();
+
+    char *get_line() { return m_read_buf + m_start_line; }
+
     HTTP_CODE parse_request_line(char *text);
 
     HTTP_CODE parse_headers(char *text);
@@ -94,26 +98,24 @@ public:
 
     HTTP_CODE do_request();
 
-    LINE_STATUS parse_line();
-
-    char *get_line() { return m_read_buf + m_start_line; }
-
     /* 一组由 process_write() 调用来回复 HTTP 响应的函数 */
     void unmap();
 
     bool add_response(const char *format, ...);
 
-    bool add_header(int content_len);
-
-    bool add_content(const char *content);
-
     bool add_status_line(int status, const char *title);
 
+    bool add_header(int content_len);
+
     bool add_content_length(int content_len);
+
+    bool add_content_type();
 
     bool add_linger();
 
     bool add_blank_line();
+
+    bool add_content(const char *content);
 
 public:
     /* 设置所有 socket 上的事件注册到一个 epoll 内核事件表 */
@@ -143,6 +145,8 @@ private:
     CHECK_STATE m_check_state;
     /* 请求方法 */
     METHOD m_method;
+    /* 用户名和密码 */
+    char *m_string;
 
     /* 客户请求的目标文件的文件名 */
     char *m_url;
@@ -165,6 +169,8 @@ private:
     /* 通过内存块分散写 */
     struct iovec m_iv[2];
     int m_iv_count;
+
+    int m_pipefd[2];
 
 };
 

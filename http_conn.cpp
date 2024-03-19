@@ -3,6 +3,7 @@
 //
 /* 任务类函数实现 */
 #include "http_conn.h"
+
 const char *ok_200_title = "OK";
 const char *error_400_title = "Bad Request";
 const char *error_400_form = "Your request has bad syntax or is inherently impossible to satisfy.\n";
@@ -13,6 +14,7 @@ const char *error_404_form = "The requested file was not found on this server.\n
 const char *error_500_title = "Internal Error";
 const char *error_500_form = "There was an unusual problem serving the requested file.\n";
 static const char *doc_root = "/home/polarnight/Code/CLionProject/WebServer/resources";
+
 /* 设置非阻塞 */
 int setnonblocking(int fd) {
     int old_option = fcntl(fd, F_GETFL);
@@ -20,6 +22,7 @@ int setnonblocking(int fd) {
     fcntl(fd, F_SETFL, new_option);
     return old_option;
 }
+
 /* 注册事件到 epoll 指定的内核事件表 */
 void addfd(int epollfd, int fd, bool one_shot) {
     struct epoll_event event;
@@ -31,11 +34,13 @@ void addfd(int epollfd, int fd, bool one_shot) {
     epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &event);
     setnonblocking(fd);
 }
+
 /* 注销 epoll 内核事件表上的事件 */
 void removefd(int epollfd, int fd) {
     epoll_ctl(epollfd, EPOLL_CTL_DEL, fd, nullptr);
     close(fd);
 }
+
 /* 修改 epoll 内核事件表上的事件 */
 void modfd(int epollfd, int fd, int ev) {
     epoll_event event;
@@ -43,6 +48,7 @@ void modfd(int epollfd, int fd, int ev) {
     event.events = ev | EPOLLIN | EPOLLET | EPOLLONESHOT | EPOLLRDHUP;
     epoll_ctl(epollfd, EPOLL_CTL_MOD, fd, &event);
 }
+
 /* 处理客户请求 */
 void http_conn::process() {
     HTTP_CODE read_ret = process_read();
@@ -56,8 +62,10 @@ void http_conn::process() {
     }
     modfd(m_epollfd, m_sockfd, EPOLLOUT);
 }
+
 int http_conn::m_epollfd = -1;
 int http_conn::m_user_count = 0;
+
 /* 初始化客户连接 */
 void http_conn::init(int sockfd, const sockaddr_in &address) {
     m_sockfd = sockfd;
@@ -72,6 +80,7 @@ void http_conn::init(int sockfd, const sockaddr_in &address) {
 
     init();
 }
+
 /* 关闭客户连接 */
 void http_conn::close_conn(bool real_close) {
     if (real_close && (m_sockfd != -1)) {
@@ -80,6 +89,7 @@ void http_conn::close_conn(bool real_close) {
         m_user_count--;
     }
 }
+
 /* 初始化连接 */
 void http_conn::init() {
     m_check_state = CHECK_STATE_REQUESTLINE;
@@ -98,6 +108,7 @@ void http_conn::init() {
     memset(m_write_buf, '\0', WRITE_BUFFER_SIZE);
     memset(m_real_file, '\0', FILENAME_LEN);
 }
+
 /* 读取客户数据 */
 bool http_conn::read() {
     if (m_read_idx >= READ_BUFFER_SIZE) {
@@ -117,6 +128,7 @@ bool http_conn::read() {
     }
     return true;
 }
+
 http_conn::HTTP_CODE http_conn::process_read() {
     LINE_STATUS line_status = LINE_OK;
     HTTP_CODE ret = NO_REQUEST;
@@ -158,6 +170,7 @@ http_conn::HTTP_CODE http_conn::process_read() {
     }
     return NO_REQUEST;
 }
+
 http_conn::HTTP_CODE http_conn::parse_request_line(char *text) {
     m_url = strpbrk(text, " \t");
     if (!m_url) {
@@ -192,6 +205,7 @@ http_conn::HTTP_CODE http_conn::parse_request_line(char *text) {
     m_check_state = CHECK_STATE_HEADER;
     return NO_REQUEST;
 }
+
 http_conn::HTTP_CODE http_conn::parse_headers(char *text) {
     if (text[0] == '\0') {
         if (m_method == HEAD) {
@@ -221,6 +235,7 @@ http_conn::HTTP_CODE http_conn::parse_headers(char *text) {
     };
     return NO_REQUEST;
 }
+
 http_conn::HTTP_CODE http_conn::parse_content(char *text) {
     if (m_read_idx >= (m_content_length + m_check_idx)) {
         text[m_content_length] = '\0';
@@ -228,6 +243,7 @@ http_conn::HTTP_CODE http_conn::parse_content(char *text) {
     }
     return NO_REQUEST;
 }
+
 http_conn::HTTP_CODE http_conn::do_request() {
     strcpy(m_real_file, doc_root);
     int len = strlen(doc_root);
@@ -246,12 +262,14 @@ http_conn::HTTP_CODE http_conn::do_request() {
     close(fd);
     return FILE_REQUEST;
 }
+
 void http_conn::unmap() {
     if (m_file_address) {
         munmap(m_file_address, m_file_stat.st_size);
         m_file_address = nullptr;
     }
 }
+
 http_conn::LINE_STATUS http_conn::parse_line() {
     char temp;
     for (; m_check_idx < m_read_idx; m_check_idx++) {
@@ -276,6 +294,7 @@ http_conn::LINE_STATUS http_conn::parse_line() {
     }
     return LINE_OPEN;
 }
+
 /* 写入客户数据 */
 bool http_conn::write() {
     int temp = 0;
@@ -312,6 +331,7 @@ bool http_conn::write() {
 
     }
 }
+
 bool http_conn::add_response(const char *format, ...) {
     if (m_write_idx >= WRITE_BUFFER_SIZE) {
         return false;
@@ -326,27 +346,34 @@ bool http_conn::add_response(const char *format, ...) {
     va_end(arg_list);
     return true;
 }
+
 bool http_conn::add_header(int content_len) {
     add_content_length(content_len);
     add_linger();
     add_blank_line();
     return true;
 }
+
 bool http_conn::add_content(const char *content) {
     return add_response("%s", content);
 }
+
 bool http_conn::add_status_line(int status, const char *title) {
     return add_response("%s %d %s\r\n", "HTTP/1.1", status, title);
 }
+
 bool http_conn::add_content_length(int content_len) {
     return add_response("Content-Length: %d\r\n", content_len);
 }
+
 bool http_conn::add_linger() {
     return add_response("Connection: %s\r\n", m_linger ? "keep-alive" : "close");
 }
+
 bool http_conn::add_blank_line() {
     return add_response("%s", "\r\n");
 }
+
 bool http_conn::process_write(HTTP_CODE ret) {
     switch (ret) {
         case INTERNAL_ERROR: {
@@ -405,6 +432,6 @@ bool http_conn::process_write(HTTP_CODE ret) {
     }
     m_iv[0].iov_base = m_write_buf;
     m_iv[0].iov_len = m_write_idx;
-    m_iv_count =  1;
+    m_iv_count = 1;
     return true;
 }

@@ -123,6 +123,18 @@ int main(int argc, char *argv[]) {
     /* 循环条件 */
     bool stop_server = false;
 
+    /* 定时处理任务，重新定时以不断触发 SIGALRM 信号 */
+    void timer_handler{
+        timer_lst.tick();
+        alarm(TIMESLOT);
+    };
+
+    /* 创建定时器容器链表 */
+    static sort_timer_lst timer_list;
+
+    /* 创建连接资源数组 */
+    client_data *user_timer = new client_data[MAX_FD];
+
     /* 超时标志 */
     bool timeout = false;
 
@@ -177,7 +189,7 @@ int main(int argc, char *argv[]) {
             } else if (events[i].events & (EPOLLRDHUP | EPOLLHUP | EPOLLERR)) {
                 /* 发生异常，直接关闭客户连接 */
                 users[sockfd].close_conn();
-            } else if ((sockfd == pipefd[0]) && (events[i].events & EPOLLIN)) {
+            } else if (events[i].events & EPOLLIN) {
                 /* 根据读的结果，决定是将任务添加到线程池，还是关闭连接 */
                 if (users[sockfd].read()) {
                     pool->append(users + sockfd);

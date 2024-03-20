@@ -5,11 +5,6 @@
 #include "lst_timer.h"
 #include "http_conn.h"
 
-sort_timer_lst::sort_timer_lst() {
-    head = NULL;
-    tail = NULL;
-}
-
 sort_timer_lst::~sort_timer_lst() {
     util_timer *tmp = head;
     while (tmp) {
@@ -19,47 +14,59 @@ sort_timer_lst::~sort_timer_lst() {
     }
 }
 
+/* 添加定时器类 */
 void sort_timer_lst::add_timer(util_timer *timer) {
     if (!timer) {
         return;
     }
+    /* 链表为空，则传入的定时器作为链表的唯一节点 */
     if (!head) {
         head = tail = timer;
         return;
     }
+    /* 传入的定时器的超时时间小于当前链表头部节点的超时时间，就将定时器作为头部节点 */
     if (timer->expire < head->expire) {
         timer->next = head;
         head->prev = timer;
         head = timer;
         return;
     }
+    /* 调用私有成员，调整内部结构 */
     add_timer(timer, head);
 }
 
+/* 调整定时器 */
 void sort_timer_lst::adjust_timer(util_timer *timer) {
     if (!timer) {
         return;
     }
+    /* 被调整的定时器在链表尾部或者定时器超时值仍然小于下一个定时器超时值，不调整 */
     util_timer *tmp = timer->next;
     if (!tmp || (timer->expire < tmp->expire)) {
         return;
     }
+    /* 被调整的定时器是链表头结点，将定时器取出，重新插入 */
     if (timer == head) {
         head = head->next;
         head->prev = NULL;
         timer->next = NULL;
         add_timer(timer, head);
-    } else {
+    }
+    /* 被调整的定时器在内部，将定时器取出，重新插入 */
+    else {
         timer->prev->next = timer->next;
         timer->next->prev = timer->prev;
         add_timer(timer, timer->next);
     }
 }
 
+/* 删除定时器 */
 void sort_timer_lst::del_timer(util_timer *timer) {
     if (!timer) {
         return;
     }
+
+    /* 链表中只有一个定时器，需要删除该定时器 */
     if ((timer == head) && (timer == tail)) {
         delete timer;
         head = NULL;
@@ -91,10 +98,14 @@ void sort_timer_lst::tick() {
     time_t cur = time(NULL);
     util_timer *tmp = head;
     while (tmp) {
+        /* 链表为升序排列，当前时间小于定时器的超时时间，后面的定时器也没有到期 */
         if (cur < tmp->expire) {
             break;
         }
+        /* 当前定时器到期，则调用回调函数， 执行定时事件*/
         tmp->cb_func(tmp->user_data);
+
+        /* 将处理后的定时器从链表容器中删除， 并重置头结点 */
         head = tmp->next;
         if (head) {
             head->prev = NULL;

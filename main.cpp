@@ -21,6 +21,7 @@
 #include "threadpool.h"
 #include "http_conn.h"
 #include "lst_timer.h"
+#include "log.h"
 
 #define MAX_FD 65536
 #define MAX_EVENT_NUMBER 10000
@@ -78,6 +79,8 @@ void show_errno(int connfd, const char *info) {
 }
 
 int main(int argc, char *argv[]) {
+    Log::get_instance()->init("./mylog.log, 8192, 2000000");
+
     if (argc <= 2) {
         printf("usage: %s ip_address port_number\n", basename(argv[0]));
         exit(1);

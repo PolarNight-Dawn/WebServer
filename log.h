@@ -20,7 +20,10 @@ using namespace std;
 class Log {
 public:
     /* 公有方法获取实例 */
-    static Log *get_instance();
+    static Log *get_instance() {
+        static Log instance;
+        return &instance;
+    }
 
     /* 初始化日志文件 */
     bool init(const char *file_name, int log_buf_size = 8193, int max_lines = 500000);
@@ -33,6 +36,7 @@ public:
 
 private:
     Log();
+
     ~Log();
 
 private:
@@ -57,9 +61,9 @@ private:
 };
 
 /* 定义四个宏， 用于不同类型的日志输出 */
-#define LOG_DEBUG(format, ...) Log::get_instance()->write_log(0, format, ..., ##_VA_ARGS_);
-#define LOG_INFO(format, ...) Log::get_instance()->write_log(1, format, ..., ##_VA_ARGS_);
-#define LOG_WARN(format, ...) Log::get_instance()->write_log(2, format, ..., ##_VA_ARGS_);
-#define LOG_ERROR(format, ...) Log::get_instance()->write_log(3, format, ..., ##_VA_ARGS_);
+#define LOG_DEBUG(format, ...) Log::get_instance()->write_log(0, format, ##__VA_ARGS__);
+#define LOG_INFO(format, ...) Log::get_instance()->write_log(1, format, ##__VA_ARGS__);
+#define LOG_WARN(format, ...) Log::get_instance()->write_log(2, format, ##__VA_ARGS__);
+#define LOG_ERROR(format, ...) Log::get_instance()->write_log(3, format, ##__VA_ARGS__);
 
 #endif //WEBSERVER_LOG_H

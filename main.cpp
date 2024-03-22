@@ -70,6 +70,8 @@ void cb_func(client_data *user_data) {
     epoll_ctl(epollfd, EPOLL_CTL_DEL, user_data->sockfd, 0);
     assert(user_data);
     close(user_data->sockfd);
+    LOG_INFO("close fd %d", user_data->sockfd);
+    Log::get_instance()->flush();
 }
 
 void show_errno(int connfd, const char *info) {

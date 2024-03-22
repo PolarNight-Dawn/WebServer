@@ -25,8 +25,9 @@
 #include <cerrno>
 #include <sys/wait.h>
 #include <sys/uio.h>
-
 #include <ctime>
+
+#include "log.h"
 
 class util_timer;
 
@@ -48,8 +49,10 @@ public:
 public:
     /* 超时时间 */
     time_t expire;
+
     /* 回调函数 */
     void (*cb_func)(client_data *);
+
     /* 连接资源 */
     client_data *user_data;
     /* 前向定时器 */
@@ -116,8 +119,5 @@ public:
     static int u_epollfd;
     int m_TIMESLOT;
 };
-
-void cb_func(client_data *user_data);
-
 
 #endif //WEBSERVER_LST_TIMER_H

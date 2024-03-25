@@ -13,17 +13,14 @@
 #include <stdarg.h>
 #include <string>
 
-#include "locker.h"
+#include "../lock/locker.h"
 
 using namespace std;
 
 class Log {
 public:
     /* 公有方法获取实例 */
-    static Log *get_instance() {
-        static Log instance;
-        return &instance;
-    }
+    static Log *get_instance();
 
     /* 初始化日志文件 */
     bool init(const char *file_name, int log_buf_size = 8193, int max_lines = 500000);

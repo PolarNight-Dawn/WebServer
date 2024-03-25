@@ -20,7 +20,7 @@
 #include <sys/uio.h>
 #include <cstdarg>
 
-#include "locker.h"
+#include "../lock/locker.h"
 
 class http_conn {
 public:

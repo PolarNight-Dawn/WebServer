@@ -13,6 +13,11 @@ Log::~Log() {
         fclose(m_fp);
 }
 
+Log *Log::get_instance() {
+    static Log instance;
+    return &instance;
+}
+
 bool Log::init(const char *file_name, int log_buf_size, int max_lines) {
     m_log_buf_size = log_buf_size;
     m_buf = new char[m_log_buf_size];

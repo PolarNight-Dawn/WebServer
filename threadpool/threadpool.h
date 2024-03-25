@@ -9,7 +9,7 @@
 
 #include <list>
 
-#include "locker.h"
+#include "../lock/locker.h"
 
 template<typename T>
 class threadpool {

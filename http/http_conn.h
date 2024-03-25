@@ -19,8 +19,12 @@
 #include <sys/mman.h>
 #include <sys/uio.h>
 #include <cstdarg>
+#include <mysql/mysql.h>
+#include <map>
 
 #include "../lock/locker.h"
+#include "../CGImysql/sql_connection_pool.h"
+#include "../log/log.h"
 
 class http_conn {
 public:
@@ -74,6 +78,9 @@ public:
 
     /* 非阻塞写操作 */
     bool write();
+
+    /* 初始化数据库 */
+    void initmysql_result();
 
 public:
     /* 初始化连接 */
@@ -145,8 +152,6 @@ private:
     CHECK_STATE m_check_state;
     /* 请求方法 */
     METHOD m_method;
-    /* 用户名和密码 */
-    char *m_string;
 
     /* 客户请求的目标文件的文件名 */
     char *m_url;
@@ -171,6 +176,11 @@ private:
     int m_iv_count;
 
     int m_pipefd[2];
+
+    /* 是否启用 POST */
+    int cgi;
+    /* 用户名和密码 */
+    char *m_string;
 
 };
 

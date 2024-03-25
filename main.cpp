@@ -22,6 +22,7 @@
 #include "http/http_conn.h"
 #include "timer/lst_timer.h"
 #include "log/log.h"
+#include "CGImysql/sql_connection_pool.h"
 
 #define MAX_FD 65536
 #define MAX_EVENT_NUMBER 10000
@@ -104,9 +105,15 @@ int main(int argc, char *argv[]) {
         exit(1);
     }
 
+    /* 单例模式创建数据库连接池 */
+    SqlConnectionPool *conn_pool = SqlConnectionPool::GetInstance("localhost", "root", "root", "webdb", 3306, 5);
+
     /* 预先为每一个客户连接分配一个 http_conn 对象*/
     http_conn *users = new http_conn[MAX_FD];
     assert(users);
+
+    /* 初始化数据库读取表 */
+    users->initmysql_result();
 
     /* 创建 socket */
     int listenfd = socket(PF_INET, SOCK_STREAM, 0);
@@ -286,6 +293,7 @@ int main(int argc, char *argv[]) {
     delete[] user_timer;
     delete[] users;
     delete pool;
+    conn_pool->DestroyPool();
 
     return 0;
 }

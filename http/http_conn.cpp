@@ -13,7 +13,30 @@ const char *error_404_title = "Not Found";
 const char *error_404_form = "The requested file was not found on this server.\n";
 const char *error_500_title = "Internal Error";
 const char *error_500_form = "There was an unusual problem serving the requested file.\n";
-static const char *doc_root = "/home/polarnight/Code/CLionProject/WebServer/resources";
+static const char *doc_root = "/home/polarnight/Code/CLionProject/WebServer/root";
+
+/* 创建数据库连接池 */
+SqlConnectionPool *conn_pool = SqlConnectionPool::GetInstance("localhost", "root", "root", "webdb", 3306, 5);
+
+map<string, string> users;
+
+void http_conn::initmysql_result() {
+    MYSQL *mysql = conn_pool->GetConnection();
+    if (mysql_query(mysql, "SELECT username, passwd FROM user"))
+        LOG_ERROR("SELECT error: %s\n", mysql_error(mysql));
+
+    MYSQL_RES *result = mysql_store_result(mysql);
+    int num_fields = mysql_num_fields(result);
+    MYSQL_FIELD  *fields = mysql_fetch_fields(result);
+
+    while (MYSQL_ROW row = mysql_fetch_row(result)) {
+        string temp1(row[0]);
+        string temp2(row[1]);
+        users[temp1] = temp2;
+    }
+
+    conn_pool->ReleaseConnection(mysql);
+}
 
 /* 设置非阻塞 */
 int setnonblocking(int fd) {
@@ -120,6 +143,7 @@ void http_conn::init() {
     m_read_idx = 0;
     m_file_address = nullptr;
     m_write_idx = 0;
+    cgi = 0;
     memset(m_read_buf, '\0', READ_BUFFER_SIZE);
     memset(m_write_buf, '\0', WRITE_BUFFER_SIZE);
     memset(m_real_file, '\0', FILENAME_LEN);
@@ -297,6 +321,105 @@ http_conn::HTTP_CODE http_conn::do_request() {
     int len = strlen(doc_root);
 
     const char *ptr = strrchr(m_url, '/');
+
+    if(cgi==1 && (*(ptr+1) == '2' || *(ptr+1) == '3'))
+    {
+
+        //根据标志判断是登录检测还是注册检测
+        char flag = m_url[1];
+        //printf("====+++====+++%c\n", flag);
+
+        char *m_url_real = (char *)malloc(sizeof(char) * 200);
+        strcpy(m_url_real, "/");
+        strcat(m_url_real, m_url+2);
+        strncpy(m_real_file+len,m_url_real,FILENAME_LEN-len-1);
+        free(m_url_real);
+
+        //将用户名和密码提取出来
+        //user=123&passwd=123
+        char name[100],password[100];
+        int i;
+        for(i=5;m_string[i]!='&';++i)
+            name[i-5]=m_string[i];
+        name[i-5]='\0';
+        int j=0;
+        for(i=i+10;m_string[i]!='\0';++i,++j)
+            password[j]=m_string[i];
+        password[j]='\0';
+
+//CGI多进程登录校验
+#if 0
+
+        //fd[0]:读管道，fd[1]:写管道
+        pid_t pid;
+        int pipefd[2];
+        if(pipe(pipefd)<0)
+        {
+            LOG_ERROR("pipe() error:%d",4);
+            return BAD_REQUEST;
+        }
+        if((pid=fork())<0)
+        {
+            LOG_ERROR("fork() error:%d",3);
+            return BAD_REQUEST;
+        }
+
+        if(pid==0)
+        {
+	    //标准输出，文件描述符是1，然后将输出重定向到管道写端
+            dup2(pipefd[1],1);
+	    //关闭管道的读端
+            close(pipefd[0]);
+	    //父进程去执行cgi程序，m_real_file,name,password为输入
+	    //./check.cgi name password
+
+            execl(m_real_file,&flag,name,password, NULL);
+        }
+        else{
+	    //printf("子进程\n");
+	    //子进程关闭写端，打开读端，读取父进程的输出
+            close(pipefd[1]);
+            char result;
+            int ret=read(pipefd[0],&result,1);
+
+            if(ret!=1)
+            {
+                LOG_ERROR("管道read error:ret=%d",ret);
+                return BAD_REQUEST;
+            }
+	    if(flag == '2'){
+		    //printf("登录检测\n");
+		    LOG_INFO("%s","登录检测");
+    		    Log::get_instance()->flush();
+		    //当用户名和密码正确，则显示welcome界面，否则显示错误界面
+		    if(result=='1')
+			strcpy(m_url, "/welcome.html");
+		        //m_url="/welcome.html";
+		    else
+			strcpy(m_url, "/logError.html");
+		        //m_url="/logError.html";
+	    }
+	    else if(flag == '3'){
+		    //printf("注册检测\n");
+		    LOG_INFO("%s","注册检测");
+    		    Log::get_instance()->flush();
+		    //当成功注册后，则显示登陆界面，否则显示错误界面
+		    if(result=='1')
+			strcpy(m_url, "/log.html");
+			//m_url="/log.html";
+		    else
+			strcpy(m_url, "/registerError.html");
+			//m_url="/registerError.html";
+	    }
+	    //printf("m_url:%s\n", m_url);
+	    //回收进程资源
+            waitpid(pid,NULL,0);
+	    //waitpid(pid,0,NULL);
+	    //printf("回收完成\n");
+        }
+#endif
+    }
+
     if (*(ptr + 1) == '0') {
         char *m_real_url = (char *) malloc(sizeof(char) * 200);
         strcpy(m_real_url, "/register.html");

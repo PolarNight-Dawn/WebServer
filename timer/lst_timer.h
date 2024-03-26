@@ -29,95 +29,75 @@
 
 #include "../log/log.h"
 
-class util_timer;
+using std::exception;
+
+#define BUFFER_SIZE 64
+
+class heap_timer;
 
 /* 连接资源 */
 struct client_data {
-    /* 客户端 socket 地址 */
     sockaddr_in address;
-    /* socket 文件描述符 */
     int sockfd;
-    /* 定时器 */
-    util_timer *timer;
+    char buf[BUFFER_SIZE];
+    heap_timer *timer;
 };
 
 /* 定时器类 */
-class util_timer {
+class heap_timer {
 public:
-    util_timer() : prev(nullptr), next(nullptr) {}
+    heap_timer(int delay);
 
 public:
-    /* 超时时间 */
     time_t expire;
 
-    /* 回调函数 */
     void (*cb_func)(client_data *);
 
-    /* 连接资源 */
     client_data *user_data;
-    /* 前向定时器 */
-    util_timer *prev;
-    /* 后继定时器 */
-    util_timer *next;
 };
 
-/* 定时器容器类 */
-class sort_timer_lst {
+/* 时间堆类 */
+class time_heap {
 public:
-    sort_timer_lst() : head(nullptr), tail(nullptr) {}
+    /* 初始化一个大小为 cap 的空堆 */
+    time_heap(int cap);
 
-    ~sort_timer_lst();
+    /* 用已有数组来初始化堆 */
+    time_heap(heap_timer **init_array, int size, int capacity);
 
-    /* 添加定时器 */
-    void add_timer(util_timer *timer);
+    /* 销毁时间堆 */
+    ~time_heap();
 
-    /* 调整定时器 */
-    void adjust_timer(util_timer *timer);
+public:
+    /* 添加目标定时器 */
+    void add_timer(heap_timer *timer);
 
-    /* 删除定时器 */
-    void del_timer(util_timer *timer);
+    /* 删除目标定时器 */
+    void del_timer(heap_timer *timer);
 
-    /* 定时任务处理函数 */
+    /* 获取堆顶部的定时器 */
+    heap_timer *top() const;
+
+    /* 删除堆顶部的定时器 */
+    void pop_timer();
+
+    /* 心搏函数 */
     void tick();
 
+    bool empty() const;
+
 private:
-    /* 调整链表内部节点 */
-    void add_timer(util_timer *timer, util_timer *lst_head);
+    /* 下虑函数 */
+    void percolate_down(int hole);
 
-    util_timer *head;
-    util_timer *tail;
+    /* 扩容函数 */
+    void resize();
+
+private:
+    heap_timer **array;
+    int capacity;
+    int cur_size;
 };
 
-class Utils {
-public:
-    Utils() {}
-
-    ~Utils() {}
-
-    void init(int timeslot);
-
-    //对文件描述符设置非阻塞
-    int setnonblocking(int fd);
-
-    //将内核事件表注册读事件，ET模式，选择开启EPOLLONESHOT
-    void addfd(int epollfd, int fd, bool one_shot, int TRIGMode);
-
-    //信号处理函数
-    static void sig_handler(int sig);
-
-    //设置信号函数
-    void addsig(int sig, void(handler)(int), bool restart = true);
-
-    //定时处理任务，重新定时以不断触发SIGALRM信号
-    void timer_handler();
-
-    void show_error(int connfd, const char *info);
-
-public:
-    static int *u_pipefd;
-    sort_timer_lst m_timer_lst;
-    static int u_epollfd;
-    int m_TIMESLOT;
-};
 
 #endif //WEBSERVER_LST_TIMER_H

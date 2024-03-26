@@ -29,7 +29,7 @@
 #define TIMESLOT 5
 
 static int pipefd[2];
-static sort_timer_lst timer_list;
+static time_heap timer_heaps = time_heap(64);
 static int epollfd = 0;
 
 /* 设置非阻塞 */
@@ -63,7 +63,7 @@ void sig_handler(int sig) {
 }
 
 void timer_handler() {
-    timer_list.tick();
+    timer_heaps.tick();
     alarm(TIMESLOT);
 }
 
@@ -250,12 +250,12 @@ int main(int argc, char *argv[]) {
                 users[sockfd].close_conn();
 
                 cb_func(&user_timer[sockfd]);
-                util_timer *timer = user_timer[sockfd].timer;
+                heap_timer *timer = user_timer[sockfd].timer;
                 if (timer) {
-                    timer_list.del_timer(timer);
+                    timer_heaps.del_timer(timer);
                 }
             } else if (events[i].events & EPOLLIN) {
-                util_timer *timer = user_timer[sockfd].timer;
+                heap_timer *timer = user_timer[sockfd].timer;
                 /* 根据读的结果，决定是将任务添加到线程池，还是关闭连接 */
                 if (users[sockfd].read()) {
                     pool->append(users + sockfd);
@@ -264,13 +264,13 @@ int main(int argc, char *argv[]) {
                         time_t cur = time( NULL );
                         timer->expire = cur + 3 * TIMESLOT;
                         printf( "adjust timer once\n" );
-                        timer_list.adjust_timer( timer );
+                        timer_heaps.add_timer( timer );
                     }
                 } else {
                     users[sockfd].close_conn();
                     cb_func(&user_timer[sockfd]);
                     if (timer) {
-                        timer_list.del_timer(timer);
+                        timer_heaps.del_timer(timer);
                     }
                 }
             } else if (events[i].events & EPOLLOUT) {

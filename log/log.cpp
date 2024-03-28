@@ -6,6 +6,7 @@
 
 Log::Log() {
     m_count = 0;
+    m_is_async = false;
 }
 
 Log::~Log() {
@@ -13,12 +14,14 @@ Log::~Log() {
         fclose(m_fp);
 }
 
-Log *Log::get_instance() {
-    static Log instance;
-    return &instance;
-}
+bool Log::init(const char *file_name, int log_buf_size, int max_lines, int max_queue_size) {
+    if (max_queue_size >= 1) {
+        m_is_async = true;
+        m_log_queue = new block_queue<std::string>(max_queue_size);
+        pthread_t tid;
+        pthread_create(&tid, nullptr, flush_log_thread, nullptr);
+    }
 
-bool Log::init(const char *file_name, int log_buf_size, int max_lines) {
     m_log_buf_size = log_buf_size;
     m_buf = new char[m_log_buf_size];
     memset(m_buf, '\0', sizeof(m_buf));
@@ -115,6 +118,15 @@ void Log::write_log(int level, const char *format, ...) {
 
     fputs(log_str.c_str(), m_fp);
     m_mutex.unlock();
+
+    if (m_is_async && !m_log_queue->full()) {
+        m_log_queue->push(log_str);
+    } else {
+        m_mutex.lock();
+        fputs(log_str.c_str(), m_fp);
+        m_mutex.unlock();
+    }
+
     va_end(valst);
 }
 

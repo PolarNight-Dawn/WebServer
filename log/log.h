@@ -14,16 +14,24 @@
 #include <string>
 
 #include "../lock/locker.h"
+#include "./block_queue.h"
 
 using namespace std;
 
 class Log {
 public:
     /* 公有方法获取实例 */
-    static Log *get_instance();
+    static Log *get_instance() {
+        static Log instance;
+        return &instance;
+    }
+
+    static void *flush_log_thread(void *args) {
+        Log::get_instance()->async_write_log();
+    }
 
     /* 初始化日志文件 */
-    bool init(const char *file_name, int log_buf_size = 8193, int max_lines = 500000);
+    bool init(const char *file_name, int log_buf_size = 8193, int max_lines = 500000, int max_queue_size = 0);
 
     /* 内容格式化 */
     void write_log(int level, const char *format, ...);
@@ -34,7 +42,17 @@ public:
 private:
     Log();
 
-    ~Log();
+    virtual ~Log();
+
+    /* 异步写入 */
+    void *async_write_log() {
+        string single_log;
+        while (m_log_queue->pop(single_log)) {
+            m_mutex.lock();
+            fputs(single_log.c_str(), m_fp);
+            m_mutex.unlock();
+        }
+    }
 
 private:
     /* 路径名 */
@@ -55,6 +73,10 @@ private:
     char *m_buf;
     /* 同步类 */
     locker m_mutex;
+    /* 异步阻塞队列 */
+    block_queue<string> *m_log_queue;
+    /* 是否异步标志位 */
+    bool m_is_async;
 };
 
 /* 定义四个宏， 用于不同类型的日志输出 */
